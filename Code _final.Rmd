@@ -1,6 +1,6 @@
 ---
 title: "Projet 13.01"
-author: "Nicolas COBAN"
+author: "Edmée HOGENMULLER"
 date: "2023-01-13"
 output: pdf_document
 ---
@@ -101,25 +101,6 @@ setwd("C:/Users/edmee/OneDrive - De Vinci/A4/S8/Simulation/Projet")
 #df <- read.csv(file.choose(new=TRUE),sep=";")
 ```
 
-Nico:
-```{r eval=FALSE }
-# POUR NICO :
-getwd()
-
-df <- read.csv("Caused of Deaths.csv",sep=",")
-
-nd <- read.csv("Natural disaster.csv", skip = 6,header=T,sep=";")
-
-conflit <- read.csv("Nombre de conflits.csv", header = TRUE,sep=";",check.names=F)
-
-ter<-read.csv("Terrorism.csv")
-
-GDP <- read.csv("gdp-per-capita-maddison-2020.csv")
-
-democ <- read.csv("democracy-polity.csv")
-
-#df <- read.csv(file.choose(new=TRUE),sep=",")
-```
 
 
 On rechange notre table pour qu'elle soit plus utilisable, et on garde une unique ligne par pays par annee

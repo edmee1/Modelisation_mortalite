@@ -1,0 +1,2077 @@
+---
+title: "Projet 13.01"
+author: "Nicolas COBAN"
+date: "2023-01-13"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir ="C:/Users/edmee/OneDrive - De Vinci/A4/S8/Simulation/Projet")
+```
+
+#Initialisation
+```{r}
+#install.packages("dplyr")
+library(dplyr)
+#install.packages("mice")
+library(mice)
+#install.packages("tidyr")
+library(tidyr)
+#install.packages("reshape2")
+library(reshape2)
+#install.packages("zoo")
+library(zoo)
+#install.packages("RColorBrewer")
+library(RColorBrewer)
+#install.packages("rnaturalearth")
+library(rnaturalearth)
+#install.packages("tidyverse")
+library(tidyverse)
+#install.packages("ggplot2")
+library(ggplot2)
+#install.packages("ggthemes")
+library(ggthemes)
+library(viridis)
+#install.packages("quantmod")
+library(quantmod)
+#install.packages("PerformanceAnalytics")
+library(PerformanceAnalytics)
+#install.packages("cvar")
+library(cvar)
+#install.packages("plotly")
+library(plotly)
+#install.packages("fitdistrplus")
+library(fitdistrplus)
+#install.packages("actuar")
+library(actuar)
+#install.packages("extRemes")
+library(extRemes)
+#install.packages("evir")
+library(evir)
+#install.packages("evd")
+library(evd)
+#install.packages("corrplot")
+library(corrplot)
+#install.packages("shiny")
+library(shiny)
+#install.packages("FactoMineR")
+library(FactoMineR)
+#install.packages("explor")
+library(explor)
+#install.packages("stats")
+library(stats)
+#install.packages("car")
+library(car)
+#install.packages("caret")
+library(caret)
+#install.packages("VineCopula")
+library(VineCopula)
+#install.packages("copula")
+library(copula)
+#install.packages("scatterplot3d")
+library(scatterplot3d)
+#install.packages("grid")
+library(grid)
+#install.packages("QRM")
+library(QRM)
+#install.packages("VC2copula")
+library(VC2copula)
+```
+
+
+#Chargement bdd
+Edmee:
+```{r }
+#df <- read.csv(file.choose(new=TRUE),sep=",")
+df <- read.csv("C:/Users/edmee/OneDrive - De Vinci/A4/S8/Simulation/Data/Caused of Deaths.csv",sep=",")
+
+nd <- read.csv("C:/Users/edmee/OneDrive - De Vinci/A4/S8/Simulation/Data/Natural disaster.csv", skip = 6,header=T,sep=";")
+
+conflit <- read.csv("C:/Users/edmee/OneDrive - De Vinci/A4/S8/Simulation/Data/Nombre de conflits.csv", header = TRUE,sep=";",check.names=F)
+
+ter<-read.csv("C:/Users/edmee/OneDrive - De Vinci/A4/S8/Simulation/Data/Terrorism.csv")
+
+GDP <- read.csv("C:/Users/edmee/OneDrive - De Vinci/A4/S8/Simulation/Data/gdp-per-capita-maddison-2020.csv")
+
+democ <- read.csv("C:/Users/edmee/OneDrive - De Vinci/A4/S8/Simulation/Data/democracy-polity.csv")
+
+getwd()
+setwd("C:/Users/edmee/OneDrive - De Vinci/A4/S8/Simulation/Projet")
+#df <- read.csv(file.choose(new=TRUE),sep=";")
+```
+
+Nico:
+```{r eval=FALSE }
+# POUR NICO :
+getwd()
+
+df <- read.csv("Caused of Deaths.csv",sep=",")
+
+nd <- read.csv("Natural disaster.csv", skip = 6,header=T,sep=";")
+
+conflit <- read.csv("Nombre de conflits.csv", header = TRUE,sep=";",check.names=F)
+
+ter<-read.csv("Terrorism.csv")
+
+GDP <- read.csv("gdp-per-capita-maddison-2020.csv")
+
+democ <- read.csv("democracy-polity.csv")
+
+#df <- read.csv(file.choose(new=TRUE),sep=",")
+```
+
+
+On rechange notre table pour qu'elle soit plus utilisable, et on garde une unique ligne par pays par annee
+```{r}
+m <- dcast(df,Year+Country~Cause,value.var = "Deaths")
+
+g <- subset (df, select = -c(Cause,Deaths))
+df_old=df
+
+df<-left_join(m,g,by=c("Year","Country"))
+df=unique(df,incomparables=)
+
+
+year=unique(df$Year)
+co=unique(df$Country)
+df2=df[]
+za=df[1,]
+for (n in year) {
+  for (i in co)
+  {
+    q=df2[df2$Year==n & df2$Country==i,]
+    if (nrow(q)!=1)
+    {
+      q=q[!is.na(q$Total.Pop),]
+    }
+    za=rbind(q, za)
+  }
+}
+
+copie=za
+za=copie
+za$Death=rowSums(za[, c("Conflict and Terrorism", "Epidemics", "Famine", "Natural Disaster","Other Injuries")])
+
+```
+##Approximation valeur manquante
+On supprimer les pays avec trop de valeurs manquante, ou trop peu d'annee
+```{r}
+
+nas=za[is.na(za$GDP),]
+nas2 = nas %>% group_by(Country, ISO_CODE)  %>%
+                    summarise(taille = length(Total.Pop),
+                              .groups = 'drop')
+null=nas2$Country[nas2$taille>30]
+
+nas=za[is.na(za$Total.Pop),]
+nas2 = nas %>% group_by(Country, ISO_CODE)  %>%
+                    summarise(taille = length(Total.Pop),
+                              .groups = 'drop')
+null2=nas2$Country[nas2$taille>30]
+null=append(null, null2)
+
+nas2 = za %>% group_by(Country, ISO_CODE)  %>%
+                    summarise(taille = length(Total.Pop),
+                              .groups = 'drop')
+null3=nas2$Country[nas2$taille<15]
+null3=append(null,null3)
+
+
+
+za=za[!(za$Country %in% null3),]
+p=unique(za$Country)
+n=unique(df$Country)
+
+setdiff(n,p)
+
+
+```
+
+On va estimer par interpolation les donnees manquantes.
+Probleme, si les na sont au dbut ou a la fin, on ne peut pas deviner. 
+Pour le moment, j'ai fait le choix de supprimer les lignes avec na en pop, et je laisse celle avec na en GDP
+
+Avec l'estimation de Male et female pop, je calcule pop tot, et a partir de poptot et GDP, je calcule PCA
+```{r}
+
+co=unique(za$Country)
+newdf=za[1,]
+for (i in co)
+{
+  
+  m=za[za$Country==i,]
+  
+  m <- m %>%
+    mutate(Male.POP = na.approx(Male.POP,na.rm = FALSE))
+  m <- m %>%
+    mutate(GDP = na.approx(GDP,na.rm = FALSE))
+  m <- m %>%
+    mutate(Female.POP = na.approx(Female.POP,na.rm = FALSE))
+  
+  newdf=rbind(newdf,m)
+   
+}
+
+newdf=newdf[!(is.na(newdf$Female.POP)),]
+newdf$Total.Pop=rowSums(newdf[,c("Male.POP","Female.POP")], na.rm = TRUE)
+newdf$PCAP=newdf[,"GDP"]/newdf[,"Total.Pop"]
+ 
+sum(sum(is.na(newdf$Male.POP)))
+sum(sum(is.na(newdf$Female.POP)))
+sum(sum(is.na(newdf$Total.Pop)))
+sum(sum(is.na(newdf$GDP)))
+sum(sum(is.na(df$PCAP)))
+
+df=newdf
+```
+Pour les dernieres donees manquante on prend celle d'une autre bdd
+
+```{r}
+
+
+names(GDP)[1]<-"Country"
+names(GDP)[2]<-"ISO"
+
+names(df)[8] <- "ISO"
+df=left_join(df,GDP,by=c("Country","Year","ISO"))
+
+a=df[(is.na(df$PCAP)),]
+a$PCAP=a$GDP.per.capita
+sum(is.na(a$PCAP))
+df=rbind(df,a)
+
+df=df[!(is.na(df$PCAP)),]
+```
+
+##Merging
+Merge avec natural disaster
+
+On va garder uniquement quelque variable de natural disaster. 
+On va mettre une colonne par type de disaster, et mettre le nombre de survenant de ce disaster par annee par pays. 
+```{r}
+
+
+unique(nd$Disaster.Type)
+#colnames(nd)
+keep=c("Disaster.Type","Year","ISO","Start.Month","Total.Deaths")
+natural_dis=nd[,keep]
+epidemic=natural_dis[natural_dis$Disaster.Type=='Epidemic',]
+
+#natural_dis=subset(natural_dis,natural_dis$Disaster.Type!='Epidemic' )
+
+natural_dis2 = natural_dis %>% group_by(Year, ISO,Disaster.Type)  %>%
+  summarise(Nombre=length(Disaster.Type),
+            Mort=sum(Total.Deaths),
+            .groups = 'drop')
+
+epidemic2=epidemic %>% group_by(Year, ISO,Disaster.Type)  %>%
+  summarise(Nombre=length(Disaster.Type),
+            Mort=sum(Total.Deaths),
+            .groups = 'drop')
+
+
+ne <- dcast(natural_dis2,Year+ISO~Disaster.Type,value.var = "Nombre")
+ne[is.na(ne)]<-0
+type=unique((nd$Disaster.Type))
+type=subset(type,type!="Epidemic")
+ne$Nb_cat=rowSums(ne[, type])
+colnames(ne)[6]
+names(ne)[6]<-"Nb_epi"
+names(df)[8] <- "ISO"
+df<-left_join(df,ne[c("Year","ISO","Nb_cat","Nb_epi")],by=c("Year","ISO"))
+
+
+```
+Ici au final j'ai decide de garer uniquement le nombre de catastroph et epidemie, et pas plus de detail, pour ne pas surcharger les donnees 
+
+Merge avec Conflit
+```{r}
+
+colnames(conflit)
+names(conflit)[3] <- "Year"
+names(conflit)[2] <- "Nb_conf"
+df<-left_join(df,conflit,by=c("Year","Country"))
+```
+
+Merge avec terrorisme:
+```{r}
+#library(openxlsx)
+#sev <- read.xlsx("C:/Users/edmee/OneDrive - De Vinci/A4/S8/Simulation/Data/Terrorism.xlsx")
+
+colnames(ter)
+
+keep=c("iyear","country_txt","nkillus","attacktype1_txt")
+saz=ter[,keep]
+#m=write.csv(saz,file="Terrorism.csv")
+
+names(saz)[1] <- "Year"
+names(saz)[2] <- "Country"
+names(saz)[4] <- "Type_att"
+a=unique(ter$attacktype1_txt)
+```
+
+Ici je vais enlever les lignes avec des donnees manquantes, puis celle ou l'ataque n'a pas fait de mort
+
+
+```{r}
+saz=saz[!(is.na(saz$nkillus)),]
+saz=saz[saz$nkillus!=0,]
+terr = saz %>% group_by(Year,Country)  %>%
+  summarise(Nb_terr=length(Type_att),
+            .groups = 'drop')
+df<-left_join(df,terr,by=c("Year","Country"))
+```
+
+
+Merge de democratie
+It captures the extent to which open,
+multi-party, and competitive elections choose a chief executive who faces comprehensive
+institutional constraints, and political participation is competitive. It ranges from -10 to 10 (fully
+democratic).
+https://ourworldindata.org/grapher/democracy-polityecountry=AUS~ARG~BWA~CHN
+
+```{r}
+#azdf=azdf[azdf$Year>1970,]
+names(democ)[1]<-"Country"
+names(democ)[2]<-"ISO"
+df=left_join(df,democ,by=c("Country","Year","ISO"))
+```
+
+
+```{r}
+df$Nb_cat[is.na(df$Nb_cat)]<-0
+df$Nb_conf[is.na(df$Nb_conf)]<-0
+df$Nb_terr[is.na(df$Nb_terr)]<-0
+df$Nb_epi[is.na(df$Nb_epi)]<-0
+
+df$democracy_polity[is.na(df$democracy_polity)]<-0
+df[ , c("X417485.annotations", "GDP.per.capita")] <- list(NULL)
+```
+
+##Finalite
+
+```{r}
+df$Famine=df$Famine*1000/df$Total.Pop
+df$`Conflict and Terrorism`=df$`Conflict and Terrorism`*1000/df$Total.Pop
+df$Epidemics=df$Epidemics*1000/df$Total.Pop
+df$`Natural Disaster`=df$`Natural Disaster`*1000/df$Total.Pop
+df$`Other Injuries`=df$`Other Injuries`*1000/df$Total.Pop
+df$Death_percmille=df$Death*1000/df$Total.Pop
+
+
+names(df)[3] <- "Conf_terr"
+names(df)[6] <- "Nat_dis"
+names(df)[7] <- "Other"
+```
+
+```{r}
+df$GDP<-NULL
+```
+
+```{r}
+
+summary(df)
+p=unique(df_old$Country)
+l=unique(df$Country)
+o=unique(df2$Country)
+
+setdiff(p,l)
+#setdiff(l,o)
+#df=newdf
+
+```
+Avec tout nos manips, 9 pays ont ete enleve: Parmis eux, seulement 6 sont reelement des pays, ils s'agit de petites iles + Coree du nord
+
+# Analyse univariee
+
+ Histogramme de nos variables quantitatives
+```{r}
+# Recuperer les noms des colonnes du data frame
+var_quantitative<-select_if(df, is.numeric)
+colnames_quanti=colnames(var_quantitative)
+
+# Pour chaque colonne du data frame
+for (col in colnames_quanti) {
+  # Tracer l'histogramme de la colonne
+  hist(df[,col],xlab=col, main =paste("Histogramme de la frequence de", col),col=brewer.pal(n=11, "RdBu"), probability = T,breaks=50)
+}
+
+summary(df$democracy_polity)
+summary(df$PCAP)
+```
+
+Pas forcement tres interessant. On peut dire que on a  des extremes
+
+Boxplot de nos variables quantitatives
+```{r Boxplot de nos variables quantitatives}
+
+# Pour chaque colonne du data frame
+for (col in colnames_quanti) {
+  # Tracer le boxplot de la colonne
+  boxplot(df[,col],xlab=col, main=paste("Boxplot de", col),col=brewer.pal(n=11, "RdBu"))
+}
+```
+Toujours pas tres interessant a analyser
+
+```{r}
+hist(df$Death_percmille, xlab="Nombre de morts pour 100 000 habitants",main="Histograme",col=brewer.pal(n=11, "RdBu"), probability = T,breaks=100)
+hist(df$democracy_polity, xlab="Etat de la democratie",main="Histograme",col=brewer.pal(n=11, "RdBu"), probability = T,breaks=20)
+hist(df$PCAP, xlab="PIB par habitant",main="Histograme",col=brewer.pal(n=11, "RdBu"), probability = T,breaks=50)
+boxplot(df$Death_percmille, xlab="Nombre de morts pour 100 000 habitants", main=paste("Boxplot", col),col=brewer.pal(n=11, "RdBu"))
+boxplot(df$PCAP, xlab="PIB par habitant", main="Boxplot",col=brewer.pal(n=11, "RdBu"))
+boxplot(df$democracy_polity, xlab="Etat de la democratie", main="Boxplot",col=brewer.pal(n=11, "RdBu"))
+```
+
+# Analyse bivariee
+
+
+##Etude cartographie
+```{r}
+hist(df$Death_percmille,breaks=100)
+
+plot(density(df$Death_percmille))
+
+```
+
+```{r}
+ 
+df_grp = df %>% group_by(Country, ISO)  %>%
+                    summarise(Mort = mean(Death_percmille),
+                              Famine = mean(Famine),
+                              Epidemics = mean(Epidemics),
+                              Other = mean(Epidemics),
+                              Natural = mean(Nat_dis),
+                              Terrorism = mean(Conf_terr),
+                              Count = length(Death),
+                              Pop_moy = mean(Total.Pop),
+                              Femme_moy = mean(Female.POP),
+                              Homme_moy = mean(Male.POP),
+                              democracy_polity=mean(democracy_polity),
+                              
+                              .groups = 'drop')
+ 
+#View(df_grp)
+```
+
+
+```{r}
+df_grp=df_grp[df_grp$Country!="Haiti",]
+df_grp=df_grp[df_grp$Country!="Armenia",]
+map <- ne_countries(scale = "medium", returnclass = "sf")
+#View(map)
+map1 <- merge(map, df_grp, by.x = "adm0_a3", by.y = "ISO", all.y = TRUE)
+```
+
+
+J'essaie ici de rendre interactif la carte
+
+```{r}
+assoc_graph <- ggplot(data = map1) +
+  geom_sf(aes(fill = Mort), 
+          position = "identity") + 
+  labs(fill='Morts')  +
+  scale_fill_viridis_c(option = "viridis")
+assoc_graph + theme_map()
+```
+
+
+```{r}
+assoc_graph <- ggplot(data = map1) +
+  geom_sf(aes(fill = Famine), 
+          position = "identity") + 
+  labs(fill='Famine')  +
+  scale_fill_viridis_c(option = "viridis")
+assoc_graph + theme_map()
+
+
+assoc_graph <- ggplot(data = map1) +
+  geom_sf(aes(fill = Epidemics), 
+          position = "identity") + 
+  labs(fill='Epidemics')  +
+  scale_fill_viridis_c(option = "viridis")
+assoc_graph + theme_map()
+
+assoc_graph <- ggplot(data = map1) +
+  geom_sf(aes(fill = Natural), 
+          position = "identity") + 
+  labs(fill='Natural')  +
+  scale_fill_viridis_c(option = "viridis")
+assoc_graph + theme_map()
+
+assoc_graph <- ggplot(data = map1) +
+  geom_sf(aes(fill = Terrorism), 
+          position = "identity") + 
+  labs(fill='Terrorism')  +
+  scale_fill_viridis_c(option = "viridis")
+assoc_graph + theme_map()
+```
+Democraty:
+```{r}
+df2=df[df$Year==2017, ]
+map <- ne_countries(scale = "medium", returnclass = "sf")
+#View(map)
+map1 <- merge(map, df2, by.x = "adm0_a3", by.y = "ISO", all.y = TRUE)
+
+assoc_graph <- ggplot(data = map1) +
+  geom_sf(color = "white",aes(fill = democracy_polity), 
+          position = "identity") + 
+  labs(fill='Democraty')  +
+  scale_fill_viridis_c(option = "F")
+assoc_graph + theme_map()
+
+df2=df[df$Year==1988, ]
+map <- ne_countries(scale = "medium", returnclass = "sf")
+#View(map)
+map1 <- merge(map, df2, by.x = "adm0_a3", by.y = "ISO", all.y = TRUE)
+
+assoc_graph <- ggplot(data = map1) +
+  geom_sf(color = "white",aes(fill = democracy_polity), 
+          position = "identity") + 
+  labs(fill='Democraty')  +
+  scale_fill_viridis_c(option = "F")
+assoc_graph + theme_map()
+
+
+```
+PIB
+```{r}
+df2=df[df$Year==2017, ]
+map <- ne_countries(scale = "medium", returnclass = "sf")
+#View(map)
+map1 <- merge(map, df2, by.x = "adm0_a3", by.y = "ISO", all.y = TRUE)
+
+assoc_graph <- ggplot(data = map1) +
+  geom_sf(color = "white",aes(fill = PCAP), 
+          position = "identity") + 
+  labs(fill='PIB')  +
+  scale_fill_viridis_c(option = "F")
+assoc_graph + theme_map()
+
+df2=df[df$Year==1988, ]
+map <- ne_countries(scale = "medium", returnclass = "sf")
+#View(map)
+map1 <- merge(map, df2, by.x = "adm0_a3", by.y = "ISO", all.y = TRUE)
+
+assoc_graph <- ggplot(data = map1) +
+  geom_sf(color = "white",aes(fill = PCAP), 
+          position = "identity") + 
+  labs(fill='PIB')  +
+  scale_fill_viridis_c(option = "F")
+assoc_graph + theme_map()
+
+
+```
+
+Habitant
+```{r}
+df2=df[df$Year==2017, ]
+map <- ne_countries(scale = "medium", returnclass = "sf")
+#View(map)
+map1 <- merge(map, df2, by.x = "adm0_a3", by.y = "ISO", all.y = TRUE)
+
+assoc_graph <- ggplot(data = map1) +
+  geom_sf(color = "white",aes(fill = Total.Pop), 
+          position = "identity") + 
+  labs(fill='Population')  +
+  scale_fill_viridis_c(option = "F")
+assoc_graph + theme_map()
+
+df2=df[df$Year==1988, ]
+map <- ne_countries(scale = "medium", returnclass = "sf")
+#View(map)
+map1 <- merge(map, df2, by.x = "adm0_a3", by.y = "ISO", all.y = TRUE)
+
+assoc_graph <- ggplot(data = map1) +
+  geom_sf(color = "white",aes(fill = Total.Pop), 
+          position = "identity") + 
+  labs(fill='Population')  +
+  scale_fill_viridis_c(option = "F")
+assoc_graph + theme_map()
+
+
+```
+
+Etude des annees avec le plus de mort
+
+```{r}
+df_year = df %>% group_by(Year)  %>%
+                summarise(Mort = mean(Death_percmille),
+                              Famine = mean(Famine),
+                              Epidemics = mean(Epidemics),
+                              Other = mean(Epidemics),
+                              Natural = mean(Nat_dis),
+                              Terrorism = mean(Conf_terr),
+                              Count = length(Death),
+                              Pop_moy = mean(Total.Pop),
+                              Femme_moy = mean(Female.POP),
+                              Homme_moy = mean(Male.POP),
+                              .groups = 'drop')
+ 
+#View(df_year)
+```
+
+Pemet d'observer les annees avec le plus de mort: Il s'agit de
+1982,1994,1983,1984,2004,2010
+```{r}
+boxplot(df_year$Mort, main = "Boite a moustache ")
+plot(df_year$Year,df_year$Mort,type="h")
+```
+
+```{r}
+i=2004
+#for (i in list(1983,1984,1994,2004,2010))
+visu<-function(x)
+{
+  print(x)
+  data=df[df$Year==x,]
+  map2 <- merge(map, data, by.x = "adm0_a3", by.y = "ISO", all.y = TRUE)
+  assoc_graph <- ggplot(data = map2) +
+    geom_sf(aes(fill = Death), 
+            position = "identity") + 
+    labs(fill='Morts', title=x)  +
+    scale_fill_viridis_c(option = "viridis",na.value = "blue")
+  assoc_graph + theme_map()
+}
+visu(1982)
+visu(1983)
+visu(1984)
+visu(1994)
+visu(2004)
+visu(2010)
+```
+##Corelation
+L'utilisation des tests statistiques, ne peut se faire qu'en verifiant certaines conditions : cette phase est appelee le diagnostique de regression (le plus souvent ayant trait au fait que la/les variable(s) suivent un loi dite Normale). Si c'est le cas on utilise les tests parametriques. Si les conditions ne sont pas reunies, on effectue le test non-parametrique associe.
+
+```{r eval=FALSE}
+var_quantitative<-select_if(df, is.numeric)
+colnames_quanti=colnames(var_quantitative)
+VQ = cor(var_quantitative)
+
+corrplot(VQ, method="color", addCoef.col = 1,number.cex = 0.3, tl.cex = 0.6)
+
+```
+
+```{r eval=FALSE}
+VQ = cor(var_quantitative, method = "kendall")
+
+corrplot(VQ, method="color", addCoef.col = 1,number.cex = 0.3, tl.cex = 0.6)
+```
+
+
+# Entre 2 variables quantitatives
+
+
+ ACP
+
+```{r eval=FALSE}
+# bdd_ptf - variables quantitatives
+
+#ACP = PCA(VQ)
+
+ACP2 = PCA(VQ, scale.unit = T, graph = F)
+
+explor(ACP2)
+```
+
+Representation de l'inertie des 2 premiers axes de 45%.
+
+Death_percmile correle positivement avec Conflict and Terrorism, et negativement avec pop_tot et Nb_cat.
+
+
+ANOVA
+
+On remarque que notre P-value est bien inferieure e notre seuil de significativite de 0.05 pour ces 3 ANOVAs, donc cela signifie que le nb de morts pour 100k habitants par nb de conflicts et terrorisme, par annee mais aussi par pays est significativement differente.
+```{r}
+ANOVA <- function(w) {
+  n=w
+  print(n)
+  y = df$Death_percmille 
+  x = df[,w]
+  model = aov(y ~ x, data = df)
+  print(summary(model))
+}
+
+```
+
+```{r}
+for (i in colnames_quanti)
+  {
+    ANOVA(i)
+  }
+```
+
+Croisement de 2 variables quantitatives
+```{r}
+Crois<-function(name,target)
+{
+  w=name
+  print(name)
+  df2=df[!(is.na(name)),]
+  plot(df2[,w], df2[,target],main=w, xlab=w )
+  print(chisq.test(table(df2[,w], df2[,target])))
+}
+for ( i in colnames_quanti)
+{
+  Crois(i, "PCAP")
+}
+
+```
+
+
+-> Debut de legere dependance lineaire positive de Conf_terr et Nat_dis avec Death_percmil.
+-> Test Khi-deux : p-value < 5%, donc on peut rejeter l'hypothese d'independance de ces 2 variables et Death_percmil.
+
+
+## Calcul d'indicateurs
+
+### Correlation lineaire (Pearson)
+```{r}
+cor2<-function(name,target)
+{
+  
+  df2=df[!(is.na(df[,name])),]
+  print(name)
+  print(cor(df2[,name], df2[,target]))
+}
+for ( i in colnames_quanti)
+{
+  cor2(i,"PCAP")
+}
+```
+
+
+### Correlation des rangs (Spearman)
+
+
+```{r}
+cor2<-function(name,target)
+{
+  
+  df2=df[!(is.na(df[,name])),]
+  print(name)
+  print(cor(df2[,name], df2[,target],method = "spearman"))
+}
+for ( i in colnames_quanti)
+{
+  cor2(i,"PCAP")
+}
+```
+
+### Correlation de Kendall
+
+
+```{r}
+cor3<-function(name)
+{
+  
+  df2=df[!(is.na(df[,name])),]
+  print(name)
+  print(cor(df2[,name], df2$Death_percmille,method = "kendall"))
+}
+for ( i in colnames_quanti)
+{
+  cor3(i)
+}
+```
+
+
+
+#VAR
+
+```{r}
+
+data=df$Death_percmille
+
+var=quantile(data,c(.95,.99))
+var
+mu=mean(data)
+varmean=var[2]-mu
+varmean
+#Var relative. Calculer var absolue
+es<-ES(data, p_loss =0.01, method="historical")
+es
+es<-ES(data, p=0.99, method="historical")
+es
+#TVaR(data)
+#ES: Perte moyenne au dela de la var
+
+hist(data,breaks=100,col="yellow", xlab="Morts", main="Histograme")
+abline(v=var[2],col="red",lwd=3)
+abline(v=abs(es)+var[2],col="blue",lwd=1)
+#abline(v=mean(simu),col="deepskyblue4",lwd=3)
+#abline(v=es,col="deepskyblue4",lwd=3)
+```
+
+
+
+
+
+#Etude max par annee
+Ici je selectionne le max de chaque annee
+```{r}
+
+data=df %>%
+  group_by(Year) %>%
+ 
+  summarize(Death_max = max(Death_percmille, na.rm = TRUE),  
+            Country_max = Country[which.max(Death_percmille)]) 
+
+```
+
+
+```{r}
+hist(data$Death_max)
+plot(data$Year,data$Death_max,ylab="Morts",xlab="Année",main="Maximum de mort par année")
+plot(density(data$Death_max),xlab="Maximum de mort par année",main="Fonction de densité")
+z=data$Death_max
+```
+##Test GEV 
+
+Ici shape>0= On est dans du Frechet
+```{r}
+a=fevd(z,type="GEV")
+a
+plot(a)
+gev.diag(a)
+```
+```{r}
+library(qrmtools)
+b=fit_GEV_quantile(z, p = c(0.25, 0.5, 0.75), cutoff = 3)
+b
+#Une autre technique, résultat très similaire
+```
+
+```{r}
+plot(a,ask=TRUE)
+```
+
+
+
+```{r}
+library(ismev)
+ppfit <- gev.fit(z)
+gev.diag(ppfit)
+```
+
+
+#Etude excedant
+## Determinantion des indices methodologiquement 
+```{r}
+z=df$Death_percmille
+n=nrow(df)
+z=sort(z, decreasing = TRUE)
+t1=quantile(z, probs =.9)
+
+k2=sqrt(n)
+t2=z[k2]
+k3=n^(2/3)/log(log(n))
+t3=z[k3]
+
+```
+
+
+```{r}
+a1=gpd(z,t1)
+par1=a1$par.ests
+size1=length(a1$data)
+
+a2=gpd(z,t2)
+par2=a2$par.ests
+size2=length(a2$data)
+
+a3=gpd(z,t3)
+par3=a3$par.ests
+size3=length(a3$data)
+
+name=c("90th percentil","sqrt(n)", "lastone")
+shape=c(par1[1],par2[1],par3[1])
+scale=c(par1[2],par2[2],par3[2])
+Nb_exce=c(size1,size2,size3)
+Threshold=c(t1,t2,t3)
+
+tab <- data.frame(name, Threshold,Nb_exce,shape,scale)
+
+view(tab)
+```
+On observe un grand saut entre chacun des threshold
+
+
+##Representation des MRL
+
+
+```{r}
+mrlplot(z)
+mrlplot(z, tlim = c(0, 5))
+mrlplot(z, tlim = c(0, 2))
+mrlplot(z, tlim = c(0, 1))
+```
+
+0.5 1.5 et 1  ont l'air interessant
+
+```{r}
+t4=1
+t5=1.5
+t6=0.5
+
+a4=gpd(z,t4)
+par4=a4$par.ests
+size4=length(a4$data)
+
+a5=gpd(z,t5)
+par5=a5$par.ests
+size5=length(a5$data)
+
+a6=gpd(z,t6)
+par6=a6$par.ests
+size6=length(a6$data)
+
+shape=c(par4[1],par5[1],par6[1])
+scale=c(par4[2],par5[2],par6[1])
+Nb_exce=c(size4,size5,size6)
+Threshold=c(t4,t5,t6)
+name=c("Est1","Est2","Est6")
+
+
+tab2 <- data.frame(name,Threshold,Nb_exce,shape,scale)
+tab=rbind(tab,tab2)
+```
+ Je pense prendre 1: Proche des autres thresholt trouve
+```{r}
+tcplot(z,tlim = c(0, 2),type="b")
+#tcplot(z, u.range = c(0, 1) )
+```
+
+```{r}
+tab$scale_er=0
+tab$shape_er=0
+for (i in unique(tab$Threshold) )
+{
+  M=fpot(z,i)
+  tab$scale_er[tab$Threshold==i]=M$std.err[1]
+  tab$shape_er[tab$Threshold==i]=M$std.err[2]
+}
+M1=fpot(z,1)
+M1$estimate
+M1$std.err[1]
+plot(M1)
+quant(z)
+```
+
+```{r}
+library(extRemes)
+o=tab[tab$Threshold==1,]
+sigma=o$scale
+shape=o$shape
+u=1
+n=1000
+
+```
+
+##Bootstrap
+```{r}
+library(parameters)
+
+mod <- lm(PCAP ~ democracy_polity+Nb_cat+Nb_conf+Year,
+          data = df)
+
+model_parameters(mod)
+
+
+model_parameters(mod, bootstrap = TRUE, iterations = 100)
+```
+
+# Regression parametrique
+
+## Regression simple
+
+
+```{r}
+a=df$democracy_polity
+b=df$Nb_conf
+c=df$PCAP
+
+d=df$democracy_polity
+e=df$Year
+```
+
+```{r}
+plot(df$PCAP,df$Total.Pop, ylab="PCAP",xlab="Population totale")
+```
+
+
+```{r}
+training.samples <- df$PCAP %>%
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- df[training.samples, ]
+test.data <- df[-training.samples, ]
+```
+
+
+#Regression np 
+```{r}
+library(lme4)
+#library(lmerTest) #pour ajouter dans summary r^2 et p value
+#regression simple
+modelu <- lm(PCAP ~ democraoutcy_polity,
+            data = train.data)
+modelm <- lm(PCAP ~ democracy_polity+Nb_cat+Nb_conf+Year,
+            data = train.data)
+modelp <- lm(PCAP ~ poly(Total.Pop, 5, raw = TRUE), data = train.data)
+mmodu <- lmer(PCAP ~ democracy_polity + (democracy_polity| Country), train.data)
+mmodm <- lmer(PCAP ~ democracy_polity+Nb_conf +Nb_cat+Year+ (democracy_polity | Country), train.data)
+mmodp <- lmer(PCAP ~ poly(Total.Pop, 5, raw = TRUE)+ (democracy_polity | Country), train.data)
+```
+
+```{r}
+listmod=list(modelu,mmodu,modelm,mmodm,modelp,mmodp)
+library(AICcmodavg)
+e=anova(mmodm,mmodu,mmodp, test = "Chi")
+e
+
+for (i in listmod)
+{
+  
+  print(AIC(i))
+}
+
+```
+
+```{r}
+pay=unique(df$Country)
+c=sample(pay,20)
+dfred=df[ df$Country %in% c, ]
+lattice::xyplot(PCAP~Total.Pop | Country, groups=Country, data=dfred, type=c('p','r'), auto.key=F)
+lattice::xyplot(predict(i,dfred)~Total.Pop | Country, groups=Country, data=dfred, type=c('p','r'), auto.key=F)
+```
+
+
+
+#Etude résidus
+```{r}
+i=mmodu
+library(MuMIn)
+r.squaredGLMM(i)
+predictions <- i %>% predict(test.data)
+summary(i)
+plot(predictions)
+
+plot(predictions~test.data$PCAP)
+
+plot(i)
+
+
+```
+Pas l'allure lineaire 
+x~xfit Pas une droite, mais quand meme vide triangle inferieur
+Grosse valeur de PCAP sont bien prédite, plus faible moins bien. 
+```{r}
+modelPerfomance = data.frame(
+                    RMSE = RMSE(predictions, test.data$PCAP),
+                     R2 = R2(predictions, test.data$PCAP)
+                 )
+print(modelPerfomance)
+```
+
+Résidus loi normal?
+```{r}
+qqnorm(residuals(i))
+qqline(residuals(i))
+```
+
+Les groupes doivent suivrent une liu normal
+```{r}
+coef <- ranef(i)$Country
+qqnorm(coef$`(Intercept)`)
+qqline(coef$`(Intercept)`)
+```
+
+Ici, la difference au niveau du pays ne semble pas suivre une loi normal
+
+
+##Non lineaire
+```{r}
+df2 = df %>% group_by(Country, ISO)  %>%
+                    summarise(Mort = mean(Death_percmille),
+                              Famine = mean(Famine),
+                              Epidemics = mean(Epidemics),
+                              Other = mean(Epidemics),
+                              Natural = mean(Nat_dis),
+                              Terrorism = mean(Conf_terr),
+                              Count = length(Death),
+                              Total.Pop = mean(Total.Pop),
+                              Femme_moy = mean(Female.POP),
+                              Homme_moy = mean(Male.POP),
+                              Nb_epi=mean(Nb_epi),
+                              PCAP=mean(PCAP),
+                              democracy_polity=mean(democracy_polity),
+                              .groups = 'drop')
+df2=df2[df2$Total.Pop<324985539,]
+
+y=df2$PCAP
+x=df2$Total.Pop 
+```
+
+```{r}
+
+a=df$Death_percmille
+b=df$Epidemics
+c=df$Nb_epi
+d=df$Nb_conf
+e=df$Nb_cat
+f=df$Total.Pop
+
+z=df$PCAP
+
+df2=df[df$Year==2010,]
+df2=df2[df2$Total.Pop<324985539,]
+```
+
+
+
+```{r}
+#df2=df
+
+ggplot(data=df2, aes(x=Total.Pop, y=PCAP)) +
+  geom_bar(stat="identity")
+plot(df2$PCAP~df2$Total.Pop)
+plot(z~f)
+```
+
+
+##Kernel
+
+```{r}
+library(smoothr)
+
+x=sort(x)
+m=as.matrix(cbind(x,y))
+m_smooth <- smooth_ksmooth(m, smoothness = 0.5,wrap = TRUE)
+m_smooth2 <- smooth_ksmooth(m, smoothness = 5,wrap = TRUE)
+m_smooth3 <- smooth_ksmooth(m, smoothness = 10,wrap = TRUE)
+m_smooth4 <- smooth_ksmooth(m, smoothness = 20,wrap = TRUE)
+
+plot(m, type = "p", col = "black", lwd = 3, axes = TRUE, xlab = NA,
+     ylab =' PIB/hab')
+lines(m_smooth, lwd = 3, col = 2)
+lines(m_smooth2, lwd = 3, col = 3)
+lines(m_smooth3, lwd = 3, col = 4)
+lines(m_smooth4, lwd = 3, col = 5)
+legend("topleft",paste("Smooth=",c(0.3,0.5,0.75,1)),col=2:5,lty=1)
+```
+
+
+
+
+
+##Smooth spine
+
+
+```{r}
+library(npreg)
+xfit=seq(from=min(x),to=max(x),length.out=100)
+spline_model <- ss(x, y, spar = 0.3)
+spline_model2 <- ss(x, y, spar = 0.5)
+spline_model3 <- ss(x, y, spar = 0.75)
+spline_model4 <- ss(x, y, spar = 9)
+summary(spline_model)
+summary(spline_model2)
+summary(spline_model3)
+summary(spline_model4)
+plot(y~x, ylab =' PIB/hab',xlab="Population")
+lines(spline_model,  col=2,lwd=2)
+lines(spline_model2,  col=3,lwd=2)
+lines(spline_model3, col=4,lwd=2)
+lines(spline_model4,  col=5,lwd=2)
+legend("topright",paste("Smooth=",c(0.3,0.5,0.75,1)),col=2:5,lwd=2)
+print(paste("MSE",11076/length(x)))
+```
+
+```{r}
+ANOVA(spline_model)
+```
+
+##LOESS
+```{r}
+
+y=df2$PCAP
+x=df2$Total.Pop 
+
+
+mod1=loess(y~x,span=0.3)
+mod2=loess(y~x,span=0.5)
+mod3=loess(y~x,span=0.9)
+mod4=loess(y~x,span=1)
+
+summary(mod1)
+summary(mod2)
+summary(mod3)
+summary(mod4)
+
+xfit=seq(from=min(x),to=max(x),length.out=100)
+yfit1=predict(mod1,newdata=xfit)
+yfit2=predict(mod2,newdata=xfit)
+yfit3=predict(mod3,newdata=xfit)
+yfit4=predict(mod4,newdata=xfit)
+plot(x,y, ylab =' PIB/hab',xlab="Population")
+points(xfit,yfit1,type="l",lwd=2,col="red")
+points(xfit,yfit2,type="l",lwd=2,col="blue")
+points(xfit,yfit3,type="l",lwd=2,col="forestgreen")
+points(xfit,yfit4,type="l",lwd=2,col="yellow")
+legend("topleft",c(paste("Smooth=",c(0.3,0.5,0.75,1))), lwd=2,lty=1, col=c("red","blue","forestgreen", "yellow"))
+```
+
+```{r eval=FALSE}
+
+
+library(AICcmodavg)
+models <- list(mod1, mod2,mod3,mod4)
+
+#specify model names
+mod.names <- c("1", "2","3",'4')
+
+#calculate AIC of each model
+aictab(cand.set = models, modnames = mod.names)
+```
+
+```{r}
+17720/182 
+median(df$PCAP)
+```
+
+
+##Comparaison
+```{r}
+
+plot(y~x, ylab =' PIB/hab',xlab="Population")
+lines(spline_model,  col=2,lwd=2)
+points(xfit,yfit3,type="l",lwd=2,col=3)
+lines(m_smooth2, lwd = 3, col = 4)
+legend("topleft",c("Smoothing Line","LOESS","Kernel"), lwd=2,lty=1, col=c(2,3,4) )
+```
+
+```{r}
+plot(mod1)
+```
+
+
+#Generalized additive models
+
+Le modèle additif généralisé fusionne les propriétés du modèle linéaire généralisé avec celles du modèle additif.
+
+
+
+```{r}
+ggplot(df2, aes(x = Total.Pop, y = PCAP, 
+                   color = factor(round(Nb_epi)))) + 
+  geom_point()  
+ggplot(df2, aes(x = democracy_polity, y =PCAP, 
+                   color = factor(round(Nb_epi)))) + 
+  geom_point()  
+```
+
+
+
+
+
+```{r}
+library(mgcv)
+model.g1=gam(PCAP ~ s(Total.Pop, k = 3, sp = 0.001)+s(democracy_polity, k = 3, sp = 0.001)+s(Nb_epi, k = 3, sp = 0.001), data = df2)
+model.g2=gam(PCAP ~ s(Total.Pop, k = 3, sp = 0.1)+s(democracy_polity, k = 3, sp = 0.1)+s(Nb_epi, k = 3, sp = 0.1), data = df2)
+model.g3=gam(PCAP ~ s(Total.Pop, k = 3, sp = 10)+s(democracy_polity, k = 3, sp = 010)+s(Nb_epi, k = 3, sp = 10), data = df2)
+
+model.g1$aic
+model.g2$aic
+model.g3$aic
+
+plot(model.g1, residuals = TRUE, scheme=1)
+
+```
+
+```{r}
+par(mfrow = c(2,2))
+gam.check(model.g1)
+```
+
+```{r}
+model.g1$aic
+```
+
+# Copules
+```{r}
+plot(df$Death_percmille,df$democracy_polity,pch='.')
+abline(lm(df$Death_percmille~df$PCAP),col='red',lwd=1)
+cor(df$PCAP,df$Death_percmille,method='spearman') # correlation la + faible
+```
+Avant de passer directement au processus d'ajustement de la copule, on v?rifie la corr?lation la plus forte entre deux variables et on trace la ligne de r?gression.
+On obtient que Nb_conf semble ?tre le plus corr?l? lin?airement ? Death_percmille, donc c'est la variable qui pourrait le mieux convenir ? nos donn?es.
+
+```{r}
+u <- pobs(as.matrix(cbind(df$Death_percmille,df$PCAP)))[,1]
+v <- pobs(as.matrix(cbind(df$Death_percmille,df$PCAP)))[,2]
+selectedCopula <- BiCopSelect(u,v,familyset=NA)
+selectedCopula
+
+par1 = selectedCopula$par
+par1 = abs(par1)
+par2 = selectedCopula$par2
+par2 = abs(par2)
+```
+L'algorithme d'ajustement a en effet s?lectionn? une copule bivari?e, la Rotated Tawn, et a estim? les param?tres pour nous.
+
+## Selectionner la meilleure copule via l'AIC le + faible
+```{r}
+# est-ce que je ne devrais pas mettre df = 2 ici pour chaucune des copules ?
+copula_list <- list(
+  tCopula(dim = 2),
+  normalCopula(dim = 2),
+  claytonCopula(dim = 2),
+  frankCopula(dim = 2),
+  gumbelCopula(dim = 2)
+)
+
+dfCop = data.frame(x = u, y = v)
+
+aic_list <- sapply(copula_list, function(copula) {
+  fit <- fitCopula(copula, dfCop)
+  AIC(fit)
+})
+
+best_copula <- copula_list[which.min(aic_list)]
+print(best_copula)
+
+fit <- fitCopula(normalCopula(), dfCop)
+
+# Question ? Aussi, il est important de noter que la s?lection de la copule ne garantit pas la qualit? du mod?le de copule obtenu. La v?rification de l'ad?quation du mod?le doit ?tre effectu?e par d'autres moyens tels que les graphiques de r?sidus et les tests statistiques.
+```
+
+Afin de s?lectionner la meilleure copule pour nos donn?es, on utilise les crit?res d'information AIC.
+Ainsi, afin de mod?liser nos 2 variables en utilisant une copules, nous cr?ons tout d'abord une matrice de donn?es ? deux colonnes contenant nos 2 variables. Nous testons ensuite les copules Gaussiennes, t-Student, Clayton, Frank et Gumbel. Nous calculons alors l'AIC pour chaque copule en utilisant la fonction fitCopula, et nous pouvons ainsi d?terminer la copule avec le plus petit AIC. Enfin, nous ajustons la copule s?lectionn?e ? nos donn?es.
+
+On va essayer d?sormais d'ajuster le mod?le sugg?r? ? l'aide du package "copula" et de v?rifier l'ajustement des param?tres.
+
+```{r}
+#set.seed(500)
+#m <- pobs(as.matrix(cbind(df$PCAP,df$democracy_polity)))
+
+# t.cop <- tCopula(dim=2)
+# fit <- fitCopula(t.cop,m,method='ml')
+# coef(fit)
+# 
+# g.cop <- gumbelCopula(dim = 2)
+# fit <- fitCopula(g.cop,m,method='ml')
+# coef(fit)
+# 
+# c.cop <- claytonCopula(dim = 2)
+# fit <- fitCopula(c.cop,m,method='ml')
+# coef(fit)
+# 
+# f.cop <- frankCopula(dim = 2)
+# fit <- fitCopula(f.cop,m,method='ml')
+# coef(fit)
+
+#n.cop <- normalCopula(dim = 2)
+# fit <- fitCopula(n.cop,m,method='ml')
+# coef(fit)
+
+bb.cop <- BB8Copula(param = c(2.83, 0.72))
+m <- pobs(as.matrix(cbind(df$PCAP,df$Death_percmille)))
+fit <- fitCopula(bb.cop,m,method='ml')
+coef(fit)
+
+param1_estime = fit@estimate[1]
+param2_estime = fit@estimate[2]
+
+```
+On se rend compte que les param?tres de la copule ajust?e ne sont clairement pas les m?mes que ceux sugg?r?s par la fonction BiCopSelect().
+
+On regarde alors la densit? de la copule que nous venons d'estimer.
+
+```{r}
+rho1 <- param1_estime
+dfCopule1 <- param2_estime
+persp(BB8Copula(c(rho1, dfCopule1)),dCopula)
+
+rho2 <- par1
+dfCopule2 <- par2
+persp(BB8Copula(c(rho2, dfCopule2)),dCopula)
+
+```
+Cette copule sym?trique pr?sente une plus forte concentration de points aux coins (0,0) et (1,1), comparativement au reste du nuage o? l'?talement des points est plus prononc?.
+Par ailleurs, l'apprence de notre copule ressemble fortement ? celle obtenue avec une copule de Frank pour $teta$ = 7.
+
+D?sormais, il nous suffit juste de construire la copule et d'en tirer 3965 ?chantillons al?atoires.
+
+VRAIE INTERPRETATION : Pour des points de coordonn?es proches de (0,0) et (1,1), on obtient un rho ?lev? ce qui montre une forte d?pendance de queue ? droite et ? gauche. 
+
+```{r}
+u <- rCopula(10000,BB8Copula(c(rho2, dfCopule2)))
+scatterplot3d(u[,1],u[,2],pch='.',color = "blue")
+cor(u,method='spearman')
+
+plot(u[,1],u[,2],pch='.',col='blue')
+cor(u,method='spearman')
+```
+Voici le trac? des ?chantillons contenus dans le vecteur u.
+
+Les echantillons aleatoires de la copule semblent un peu proches du cas de l'independance, mais c'est bien puisque la corr?lation entre les rendements n'est pas extremement ?lev?e (car elle est de -0.40).
+
+D?sormais, nous allons mod?liser les marginaux.
+Nous allons supposer que nos deux variables sont distribu?es normalement pour des raisons de simplicit?, m?me s'il est bien connu que c'est une hypoth?se loin d'?tre solide. Nous estimons donc les param?tres des marginaux.
+```{r}
+Death_percmille_mu <- mean(df$Death_percmille)
+Death_percmille_sd <- sd(df$Death_percmille)
+PCAP_mu <- mean(df$PCAP)
+PCAP_sd <- sd(df$PCAP)
+```
+
+Nous tra?ons ensuite les ajustements par rapport ? l'histogramme afin d'obtenir une vue d'ensemble de ce que nous faisons :
+```{r}
+# hist(df$Death_percmille,breaks=80,main='Death_percmille returns', freq=F, density=30, col='cyan')
+# lines(seq(-0.5,0.5,0.01),dnorm(seq(-0.5,0.5,0.01),Death_percmille_mu,Death_percmille_sd),col='red',lwd=2)
+# legend('topright',c('Fitted normal'),col=c('red'),lwd=2)
+# 
+# hist(df$PCAP,breaks=80,main='Nb_conf returns', density=30, col='cyan', freq=F, ylim=c(0,20), xlim=c(-0.2,0.2))
+# lines(seq(-0.5,0.5,0.01),dnorm(seq(-0.5,0.5,0.01),PCAP_mu,PCAP_sd),col='red',lwd=2)
+# legend('topright',c('Fitted normal'),col=c('red'),lwd=2)
+
+hist(df$Death_percmille,breaks=80,main='Death_percmille returns', freq=F, density=30, col='cyan')
+lines(seq(-0.5,0.5,0.01),dnorm(seq(-0.5,0.5,0.01),Death_percmille_mu,Death_percmille_sd),col='red',lwd=2)
+legend('topright',c('Fitted normal'),col=c('red'),lwd=2)
+
+hist(df$PCAP,breaks=80,main='PCAP returns', density=30, col='cyan', freq=F)
+lines(seq(-0.5,0.5,0.01),dnorm(seq(-0.5,0.5,0.01),PCAP_mu,PCAP_sd),col='red',lwd=2)
+legend('topright',c('Fitted normal'),col=c('red'),lwd=2)
+```
+Pour les nos deux histogrammes, on remarque que nos r?sidus ne suivent pas une loi normale. 
+
+Bien que nous n?gligeons certaines valeurs extr?mes situ?es dans les queues de distribution, ajout? au fait que nos densit?s ne soient pas tr?s ?lev?es ne nous aident pas plus que ?a concernant l'interpr?tation de ces deux histogrammes, et nous ne pouvons pas observer de fa?on nette notre distribution gaussienne.
+
+
+On va d?sormais obtenir nos observations simul?es ? partir de la distribution multivari?e g?n?r?e via la fonction mvdc.
+
+```{r}
+copula_dist <- mvdc(copula=BB8Copula(c(rho2, dfCopule2)), margins=c("norm","norm"),
+                    paramMargins=list(list(mean=Death_percmille_mu, sd=Death_percmille_sd),
+                                      list(mean=PCAP_mu, sd=PCAP_mu)))
+sim <- rMvdc(3965, copula_dist)
+```
+
+Ensuite, nous pouvons faire une comparaison visuelle des donn?es observ?es et simul?es ?tant donn? que nous avons maintenant des donn?es simul?es.
+
+```{r}
+plot(df$PCAP,df$Death_percmille,main='Returns')
+points(sim[,2],sim[,1],col='red')
+legend('bottomright',c('Observed','Simulated'),col=c('black','red'),pch=21)
+```
+Bien que notre graphique ne soit pas extr?mement lisible et interpr?table, on peut observer que la copule gaussienne conduit plus ou moins ? des r?sultats proches des observations r?elles, bien que les valeurs extr?mes soient moins nombreuses que dans les donn?es r?elles et que nous ayons manqu? certains des r?sultats les plus extr?mes.
+
+
+
+#Monte Carlo
+```{r}
+#fam=fam[fam!=max(fam)]
+ter2=ter[ter<quantile(ter,0.99)]
+fam2=fam[fam<quantile(fam,0.99)]
+#fam2=fam2[fam2!=max(fam2)]
+epi2=epi[epi<quantile(epi,0.99)]
+nat2=nat[nat<quantile(nat,0.99)]
+other2=other[other<quantile(other,0.99)]
+death=death[death<quantile(death,0.99)]
+
+```
+#Fonction 
+```{r}
+b_ter=seq(from=0, to=max(ter2)+1, by=0.1)
+b_epi=seq(from=0, to=max(epi2)+1, by=0.01)
+b_nat=seq(from=0, to=max(nat2)+1, by=0.001)
+b_ot=seq(from=0, to=max(other2)+1, by=0.001)
+b_fam=seq(from=0, to=max(fam2)+1, by=0.001)
+b=c(b_fam,b_nat,b_epi,b_ot,b_ter)
+dist_fam=distrib(b_fam,fam2)
+dist_ter=distrib(b_ter,ter2)
+dist_epi=distrib(b_epi,epi2)
+dist_nat=distrib(b_nat,nat2)
+dist_ot=distrib(b_ot,other2)
+f=list(dist_fam,dist_ter,dist_epi,dist_nat,dist_ot)
+e=c("dist_fam","dist_ter","dist_epi","dist_nat","dist_ot")
+```
+
+```{r}
+distrib<-function(b,data)
+{
+  x=0
+  int=0
+  distr=0
+  cumdist=0
+  dist=data.frame(int,distr,cumdist)
+  n=0
+  p=length(data)
+  for (i in b)
+  {
+    a=data[data<i & data>=n]
+    distr=length(a)/p
+    cumdist=cumdist+distr
+    ligne=c(i,distr,cumdist)
+    dist=rbind(dist,ligne)
+    n=i
+  }
+  return(dist)
+}
+```
+
+```{r}
+f=list(dist_fam,dist_ter,dist_epi,dist_nat,dist_ot)
+tirrage=0
+ter_est=0
+epi_est=(0)
+othe_est=(0)
+cat_est=(0)
+fam_est=(0)
+mol=data.frame(tirrage,fam_est,ter_est,epi_est,cat_est,othe_est)
+
+a=runif(5,0, max=100000000)
+
+for (i in c(0:10000))
+{
+  est=runif(5,0, max=100000000)
+  mol=rbind(mol,c(i,0,0,0,0,0))
+  for (j in c(1:5))
+  {
+    dist=as.data.frame(f[j])
+    a=est[j]
+    x=dist$distr[dist$cumdist<a/100000000]
+    q=x[length(x)]
+    q=dist$int[dist$distr==q]
+    q=min(q)
+    mol[i+1,j+1]=q
+  }
+}
+mol$mort=0
+mol$mort=rowSums(mol[, c("fam_est", "epi_est", "othe_est", "cat_est","ter_est")])
+
+recap=data.frame("Estimé",mean(mol$fam_est),mean(mol$epi_est),mean(mol$othe_est),mean(mol$cat_est),mean(mol$ter_est),mean(mol$mort))
+colnames(recap)<- c("Type","Famine","Epidemie","Other","Catastrophe naturel","Terrorsime","Mort")
+recap=rbind(recap,c("Observé",mean(fam2),mean(epi2),mean(other2),mean(nat2),mean(ter2),mean(death)))
+
+```
+
+#Serie temporelle
+#Catastroph naturelle
+##Preparation bdd
+```{r}
+ts <- read.csv("C:/Users/edmee/OneDrive - De Vinci/A4/S8/Simulation/Data/Natural disaster.csv", skip = 6,header=T,sep=";")
+
+
+pm=ts[ts$Country=="India",]
+
+
+
+```
+
+
+
+```{r}
+dfonz = pm %>% group_by(Year,Start.Month)  %>%
+  summarise(Mort = sum(Total.Deaths,na.rm=TRUE),
+            count = length(Total.Deaths),
+            .groups = 'drop')
+Start.Month=(c(1:12))
+
+Year=c(1980:2017)
+
+tab <- data.frame(Year[1],Start.Month[1])
+names(tab)[1]="Year"
+names(tab)[2]="Start.Month"
+for ( i in year )
+{
+  for (j in c(1:12))
+  {
+    tab=rbind(tab,c(i,j))
+  }
+}
+
+
+nat_dis_st=left_join(tab,dfonz,by=c("Year","Start.Month"))
+nat_dis_st <- nat_dis_st[-1,]
+nat_dis_st$Mort[is.na(nat_dis_st$Mort)]=0
+nat_dis_st$count[is.na(nat_dis_st$count)]=0
+
+
+```
+
+
+
+```{r}
+nat_dis_st$Date=paste(1,nat_dis_st$Start.Month,nat_dis_st$Year)
+nat_dis_st$Date=as.Date(nat_dis_st$Date, format = "%d %m %Y")
+```
+
+
+```{r}
+nat_dis_st2 <- subset(nat_dis_st, select = -c(Year, Start.Month) )
+timeserie <- ts(nat_dis_st2, frequency=12, start=c(1980,1))
+timeserie2 <- ts(nat_dis_st$count, frequency=12, start=c(1980,1))
+x <- ts(nat_dis_st2$count, frequency=12, start=c(1980,1))
+```
+
+##Transformation en série temporelle
+```{r}
+
+plot.ts(timeserie2,col='violetred2', main="Nombre de catastrophes naturelles en Inde en fonction du temps")
+plot.ts(log(timeserie))
+```
+log permet de lisser, mais des mois avec 0 donc ne donne rien
+```{r}
+print(cor(nat_dis_st$Mort, nat_dis_st$count))
+print(cor(nat_dis_st$Year, nat_dis_st$count))
+```
+
+##Visualitsation
+```{r}
+library(dygraphs)
+library(xts)
+
+```
+
+```{r}
+mort=xts(nat_dis_st2$Mort,order.by=nat_dis_st2$Date)
+Count=xts(nat_dis_st2$count,order.by=nat_dis_st2$Date)
+mort.sd=mort/sd(mort)
+Count.sd=Count/sd(Count)
+time.series=cbind(mort.sd,Count.sd)
+names(time.series)=c("mort.sd","Count.sd")
+
+dygraph(time.series)%>% dyRangeSelector()
+
+```
+```{r}
+boxplot(nat_dis_st2$count)
+hist(nat_dis_st2$count,breaks=20)
+
+```
+
+
+```{r}
+sdf = nat_dis_st%>% group_by(Start.Month)  %>%
+  summarise(Mort = mean(Mort,na.rm=TRUE),
+            count = mean(count),
+            .groups = 'drop')
+plot(sdf$count~sdf$Start.Month,type='b',pch=20)
+boxplot(nat_dis_st$count~nat_dis_st$Start.Month,col="lightblue",pch=20,cex=0.5, xlab="Mois", ylab="Nombre", main="Nombre de catastrophes naturelles en fonction du temps")
+```
+##Description
+```{r}
+mean(nat_dis_st$count)
+sd(nat_dis_st$count)
+mean(nat_dis_st$Mort)
+sd(nat_dis_st$Mort)
+```
+
+Test stationarité
+```{r}
+library(tseries)
+adf.test(timeserie2)
+```
+p-value<0.05: ¨ stationnaire
+
+```{r}
+library(urca)
+testKPSStau <- ur.kpss(x,type='tau')
+summary(testKPSStau)
+```
+Nous rejettons H0 : (Xt)t∈Z stationnaire lorsque la statistique de test dépasse les valeurs critiques au niveau considéré, ce qui est le cas ici. Nous considérons donc que le processus n’est pas stationnaire.
+
+```{r}
+library(caschrono)
+
+acf2y(x,lag.max=36)
+
+```
+
+L'autocorrélation est la corrélation entre une série chronologique et une version décalée d'elle-même. 
+La fonction d’autocorrélation est périodique, ce qui indique une
+périodicité dans la série temporelle. La ligne pointillée bleue indique le niveau en-dessous et au dessous
+duquel la corrélation n’est plus statistiquement significative.
+
+Nous observons de fortes variations saisonnières et une autocorrélation forte au lag 1 et 12, ce qui nous oriente vers un modèle saisonnier
+
+La différence entre ACF et PACF est l'inclusion ou l'exclusion des corrélations indirectes dans le calcul.
+
+
+
+
+
+```{r}
+Box.test(diff(timeserie2), lag=12, type="Ljung-Box")
+```
+Ljung-Box test: p-value<0.05 présence d'autocorélation
+La probabilité que la série soit un bruit blanc est presque nulle.
+
+
+
+
+##Décomposition
+```{r}
+timeserie2 <- ts(nat_dis_st$count, frequency=12, start=c(1980,1))
+plot(timeserie2)
+
+serie_comp <- decompose(timeserie2)
+plot(serie_comp)
+serie_ajuste <- timeserie2 - serie_comp$seasonal
+plot(serie_ajuste)
+
+```
+• Tendance : On observe une tendance à la hausse
+• Saisonnalité : Le cycle répétitif à court terme dans la série.
+• Bruit : Quelques pic, mais plutot proche de 0
+
+##Stationarité
+Désaisonalité: On enleve la saisonalité de la série temporelle
+
+Ici, pas l'air d'avoir une tendance, mais clairement une saisonalité
+```{r}
+acf2y(serie_ajuste,lag.max=36)
+```
+
+```{r}
+data.diff=diff(x)
+plot(data.diff)
+data.season=diff(data.diff,12)
+plot(data.season)
+acf2y(data.season,lag.max=36)
+```
+MEilleur modele
+1: Compter nombre de fois avat d'arriver au pic. Prendre pic 1
+2: Compter nombre de fois avant de descendre sous ligne bleu
+On peut faire un modele arima moyenne mobile avec parametre nombre pic
+```{r}
+data2=diff(serie_ajuste)
+plot(serie_ajuste)
+acf2y(data2,lag.max=36)
+```
+
+```{r}
+
+Box.test(diff(serie_ajuste), lag=12, type="Ljung-Box")
+Box.test((serie_ajuste), lag=12, type="Ljung-Box")
+Box.test(data.season, lag=12, type="Ljung-Box")
+```
+```{r}
+adf.test(x)
+adf.test(serie_ajuste)
+adf.test(diff(serie_ajuste))
+adf.test(data.season)
+```
+
+
+##Modélisation
+```{r}
+x2=serie_ajuste
+train <- window(x2, start = 1980, end = 2016)
+test <- window(x2, start = 2016)
+```
+
+##Simple forecasting
+```{r}
+library(forecast)
+mean <- meanf(train, h = 24)
+naiv=naive(train, h=24)
+snaiv=snaive(train, h=24)
+
+autoplot(train)+
+  
+  autolayer(naiv,
+    series="Naive", PI=TRUE,alpha=0.9)+
+  autolayer(snaiv,
+  series="Seasonal naive", PI=TRUE,alpha=0.9)+
+  
+  autolayer(mean,
+  series="Mean",  PI=FALSE)+
+  autolayer(naiv,PI=FALSE, color="green")+
+  ggtitle("Forecast")+
+  guides(colour=guide_legend(title="Forecast")) 
+
+p=fitted(snaiv, test)
+
+
+checkresiduals(p)
+shapiro.test(residuals(snaiv))
+
+library("e1071")
+kurtosis(residuals(snaiv), na.rm = TRUE) # le résultat d'un test de kurtosis sur une distribution normale devrait être de 0.
+accuracy(snaiv, x2)
+```
+
+
+##Holt Winter
+```{r}
+train <- window(x, start = 1980, end = 2016)
+test <- window(x, start = 2016)
+```
+
+```{r}
+fit1=hw(train,seasonal = "additive",damped=TRUE, h = 36)
+autoplot(train)+
+  autolayer(fit1,series="Prédiction",PI=TRUE)+
+  ggtitle("Nombre de catastroph au fil des années")+
+  guides(colour=guide_legend(title="Forecast"))
+```
+Avec damped
+```{r}
+fit1=hw(x,seasonal = "additive",damped=TRUE, h = 36)
+autoplot(x)+
+  autolayer(fit1,series="Prediction",PI=TRUE)+
+  ylab("Count")+
+  ggtitle("Nombre de catastrophes naturels au fil des années")+
+  guides(colour=guide_legend(title="Forecast"))
+```
+Pas de gros changement avec damped
+```{r}
+checkresiduals(fit1)
+shapiro.test(residuals(fit1))
+library("e1071")
+kurtosis(residuals(fit1), na.rm = TRUE) # le résultat d'un test de kurtosis sur une distribution normale devrait être de 0.
+accuracy(fit1)
+```
+
+##SARIMA
+```{r}
+data2=diff(serie_ajuste)
+plot(serie_ajuste)
+acf2y(data2,lag.max=36)
+```
+sarima(data, ar, diff, ma)
+ar=celui de acf
+ma=cellui de pacf
+```{r}
+library(astsa)
+library(statisticalModeling)
+a=sarima(data2,7,0,6)
+a$aic
+a
+accuracy(a, data2)
+evaluation_function(a)
+```
+
+```{r}
+sarima.for(data2,28,7,0,6)
+```
+
+```{r}
+library(astsa)
+a=sarima(x,1,0,2,0,0,0,12)
+a$aic
+a
+evaluate_model(a)
+```
+https://openclassrooms.com/fr/courses/4525371-analysez-et-modelisez-des-series-temporelles/5001251-tp-prevoyez-une-serie-temporelle-a-l-aide-des-methodes-sarima
+
+
+
+#Terrorisme
+##Preparation bdd
+```{r}
+
+ter<-read.csv("C:/Users/edmee/OneDrive - De Vinci/A4/S8/Simulation/Data/Terrorism3.csv",sep=";")
+
+
+
+pm=ter[ter$country_txt=="India",]
+
+pm <- subset(pm, select = c(iyear,imonth, country_txt,nkill) )
+names(pm)[1]="Year"
+names(pm)[2]="Start.Month"
+names(pm)[3]="Country"
+names(pm)[4]="Total.Deaths"
+```
+
+
+
+
+```{r}
+dfonz = pm %>% group_by(Year,Start.Month)  %>%
+  summarise(Mort = sum(Total.Deaths,na.rm=TRUE),
+            count = length(Total.Deaths),
+            .groups = 'drop')
+Start.Month=(c(1:12))
+
+Year=c(1980:2017)
+
+tab <- data.frame(Year[1],Start.Month[1])
+names(tab)[1]="Year"
+names(tab)[2]="Start.Month"
+for ( i in year )
+{
+  for (j in c(1:12))
+  {
+    tab=rbind(tab,c(i,j))
+  }
+}
+
+
+ter_st=left_join(tab,dfonz,by=c("Year","Start.Month"))
+ter_st <- ter_st[-1,]
+ter_st$Mort[is.na(ter_st$Mort)]=0
+ter_st$count[is.na(ter_st$count)]=0
+
+
+```
+
+
+
+```{r}
+ter_st$Date=paste(1,ter_st$Start.Month,ter_st$Year)
+ter_st$Date=as.Date(ter_st$Date, format = "%d %m %Y")
+```
+
+```{r}
+ter_st2 <- subset(ter_st, select = -c(Year, Start.Month) )
+timeserie3 <- ts(ter_st2, frequency=12, start=c(1980,1))
+timeserie4 <- ts(ter_st$count, frequency=12, start=c(1980,1))
+x3 <- ts(ter_st2$count, frequency=12, start=c(1980,1))
+```
+##Transformation en série temporelle
+```{r}
+timeserie3 <- ts(ter_st2, frequency=12, start=c(1980,1))
+plot.ts(timeserie4,col='violetred2', main="Nombre d'attaques terroristes en Inde en fonction du temps")
+plot.ts(log(timeserie))
+```
+log permet de lisser, mais des mois avec 0 donc ne donne rien
+```{r}
+print(cor(ter_st$Mort, ter_st$count))
+print(cor(ter_st$Year, ter_st$count))
+```
+
+##Visualitsation
+```{r}
+library(dygraphs)
+library(xts)
+
+```
+
+```{r}
+mort=xts(ter_st2$Mort,order.by=ter_st2$Date)
+Count=xts(ter_st2$count,order.by=ter_st2$Date)
+mort.sd=mort/sd(mort)
+Count.sd=Count/sd(Count)
+time.series=cbind(mort.sd,Count.sd)
+names(time.series)=c("mort.sd","Count.sd")
+
+dygraph(time.series)%>% dyRangeSelector()
+
+```
+```{r}
+boxplot(ter_st2$count)
+hist(ter_st2$count,breaks=20)
+
+```
+
+
+```{r}
+sdf = ter_st%>% group_by(Start.Month)  %>%
+  summarise(Mort = mean(Mort,na.rm=TRUE),
+            count = mean(count),
+            .groups = 'drop')
+plot(sdf$count~sdf$Start.Month,type='b',pch=20,xlab="Mois", ylab="Nombre d'attaques", main="Moyenne du nombre d'attaques terroristes par mois")
+boxplot(ter_st$count~ter_st$Start.Month,col="lightblue",pch=20,cex=0.5,xlab="Mois", ylab="Nombre d'attaques", main="Nombre d'attaques terroristes par mois")
+```
+##Description
+```{r}
+mean(ter_st$count)
+sd(ter_st$count)
+mean(ter_st$Mort)
+sd(ter_st$Mort)
+```
+
+Test stationarité
+```{r}
+library(tseries)
+adf.test(timeserie4)
+```
+p-value>0.05: A des chane d'être stationnaire
+
+```{r}
+library(urca)
+testKPSStau <- ur.kpss(x3,type='tau')
+summary(testKPSStau)
+```
+Nous rejettons H0 : (Xt)t∈Z stationnaire lorsque la statistique de test dépasse les valeurs critiques au niveau considéré, ce qui est le cas ici. Nous considérons donc que le processus est  stationnaire.
+
+```{r}
+library(caschrono)
+
+acf2y(x3,lag.max=36)
+
+```
+La sortie ACF présente une décroissance lente vers 0, ce qui traduit un problème de non-stationnarité. On
+effectue donc une différenciation (I − B).
+
+```{r}
+y_dif1=diff(x3,lag=1,differences=1)
+acf2y(y_dif1,lag.max=36)
+```
+
+
+
+```{r}
+Box.test(diff(timeserie4), lag=12, type="Ljung-Box")
+```
+Ljung-Box test: p-value<0.05 présence d'autocorélation
+
+
+```{r}
+
+ggplot(ter_st, aes(y = count, x = Start.Month, 
+                   color = factor(Year))) + 
+  geom_line() 
+```
+
+
+
+
+##Décomposition
+```{r}
+timeserie4 <- ts(ter_st$count, frequency=12, start=c(1980,1))
+plot(timeserie4)
+
+serie_comp <- decompose(timeserie4)
+plot(serie_comp)
+serie_ajuste2 <- timeserie4 - serie_comp$seasonal
+plot(serie_ajuste2)
+#serie_comp <- decompose(timeserie4,type="multiplicative")
+#plot(serie_comp)
+#serie_ajuste <- timeserie4 /serie_comp$seasonal
+#plot(serie_ajuste)
+```
+• Tendance : On observe une tendance à la hausse
+• Saisonnalité : Le cycle répétitif à court terme dans la série.
+• Bruit : Quelques pic, mais plutot proche de 0
+
+Désaisonalité: On enleve la saisonalité de la série temporelle
+
+STL décomposition:"Seasonal and Trend decomposition using Loess
+```{r}
+library(forecast)
+timeserie4 %>%
+  stl(t.window=13, s.window="periodic", robust=TRUE) %>%
+  autoplot()
+plot(seasadj(stl(timeserie4,t.window=13, s.window="periodic", robust=TRUE)))
+```
+Memem principe que décomposotopn, mais plus robuuste, réagit mieux face aux outliers
+Pareil, endance à la hausse.
+
+```{r}
+fit <- stl(timeserie4, t.window=13, s.window="periodic",
+  robust=TRUE)
+fit %>% forecast(method="naive") %>%
+  autoplot() + ylab("New orders index")
+fit %>% seasadj() %>% naive() %>%
+  autoplot() + ylab("New orders index") +
+  ggtitle("Naive forecasts of seasonally adjusted data")
+```
+On essaie de construire un modele avec STL
+
+
+
+
